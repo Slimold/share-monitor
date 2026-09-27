@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "lookback_years": 5,
+  "benchmark": "QQQ",
+  "broad_market": "SPY",
+  "sector_proxies": ["XLK", "SMH"],
+  "watchlist": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO", "AMD"],
+  "strategies": {
+    "mu_soxs": {
+      "enabled": true,
+      "version": "mu-soxs-confidence-v2.1",
+      "signal_symbol": "MU",
+      "inverse_symbol": "SOXS",
+      "sector_proxy": "SMH",
+      "development_window": {
+        "start": "2026-06-01",
+        "end": "2026-08-31"
+      },
+      "rsi_period": 6,
+      "percentile_window": 252,
+      "percentile_min_periods": 60,
+      "buy_threshold": 65,
+      "sell_threshold": 70,
+      "confidence_margin": 15,
+      "shock_mu_return": -0.08,
+      "shock_sector_return": -0.05,
+      "shock_cooldown_sessions": 5,
+      "weights": {
+        "buy": {
+          "oversold": 0.45,
+          "downside_stretch": 0.25,
+          "reversal": 0.20,
+          "sector_capitulation": 0.10
+        },
+        "sell": {
+          "recent_overbought": 0.30,
+          "stock_extension": 0.15,
+          "sector_weakness": 0.25,
+          "rollover": 0.20,
+          "market_risk": 0.10
+        }
+      },
+      "risk_policy": {
+        "account_risk_budget": 0.0075,
+        "mu_max_weight": 0.40,
+        "soxs_max_weight": 0.20,
+        "mu_starter_fraction": 0.50,
+        "soxs_max_holding_sessions": 5
+      }
+    }
+  },
+  "fred_series": {
+    "REAL10Y": "DFII10",
+    "NFCI": "NFCI",
+    "VXN": "VXNCLS",
+    "CASH3M": "DGS3MO"
+  },
+  "backtest": {
+    "warmup_calendar_days": 450,
+    "holdout_sessions": 252,
+    "transaction_cost_bps": 10.0,
+    "annualization": 252
+  },
+  "quality": {
+    "maximum_market_age_sessions": 3,
+    "minimum_history_sessions": 756
+  }
+}

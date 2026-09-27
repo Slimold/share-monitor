@@ -11,6 +11,13 @@ logs/
 *.log
 .arisk_nontrading_dates
 
+# 美股 MVP 运行时数据（仅本地，不再分发上游行情）
+data/cache*/
+data/us_tech_snapshot.json
+data/backtest_results.json
+reports/backtest_latest.json
+reports/backtest_latest.md
+
 # 本机专属的 launchd 配置（含绝对路径），仅提交 .example 模板
 com.arisk.update.plist
 
@@ -19,3 +26,6 @@ miaoxiang_doc.md
 
 # 系统杂项
 .DS_Store
+.pytest_cache/
+.coverage
+htmlcov/

@@ -1,4 +1,73 @@
-# A股风险监视器 · A-RISK/MONITOR
+# Share Monitor
+
+## 美股科技市场温度计 MVP
+
+仓库新增了一个可独立运行的美股日频 MVP，用于回答：
+
+- 当前美国科技市场是 `risk_on`、`neutral` 还是 `risk_off`；
+- 宏观、波动与趋势分别贡献了多少风险；
+- QQQ 总风险预算应该积极、中性还是防守；
+- AAPL、MSFT、NVDA 等自选股当前处于允许建仓、小仓、持有、观察减仓或退出条件触发状态。
+- MU–SOXS 配对策略当前的买入 MU 与卖出 MU / 买入 SOXS 置信度，以及板块确认和冲击冷却状态。
+
+它是风险环境和交易许可监测器，不预测精确顶底，不连接券商，也不自动下单。
+
+### 快速运行
+
+```powershell
+python -m pip install -r requirements-us.txt
+python run_us_monitor.py build
+python run_us_monitor.py doctor
+python run_us_monitor.py serve
+```
+
+打开 <http://127.0.0.1:8788/web/>。Windows 也可直接运行：
+
+```powershell
+.\scripts\windows\start_us_tech.ps1
+```
+
+运行测试：
+
+```powershell
+python -m pytest
+```
+
+### 在线访问与数据刷新
+
+公开看板：<https://slimold.github.io/share-monitor/>
+
+- Windows、macOS、Android 与 iPhone 浏览器都可以直接访问，页面按窄屏自动改为单列布局。
+- GitHub Actions 在北京时间周二至周六 09:17 自动运行，对应前一个美股交易日收盘后；每次都会重新抓取行情、运行测试和回测，再发布最新快照。
+- 页面右上角“重新读取”用于绕过浏览器缓存并读取最近一次已发布数据；它不会直接触发上游行情抓取。
+- 如需立即抓取并发布，可打开仓库的 **Actions → Deploy US Tech Monitor → Run workflow** 手动运行。
+
+部署工作流见 [deploy-us-tech-monitor.yml](.github/workflows/deploy-us-tech-monitor.yml)。发布物只包含静态页面和汇总 JSON，不包含 `.env`、原始行情缓存或任何密钥。
+
+构建命令会产生：
+
+- `data/us_tech_snapshot.json`：当前风险、数据质量、历史温度和自选股状态；
+- `data/backtest_results.json`：五年正式评估区间、末尾 252 日评估切片、逐日仓位/成本/收益、净值曲线和敏感性实验；
+- `reports/backtest_latest.md`：可阅读的回测报告。
+
+模型评估只统计最近五年；评估期之前的 450 个日历日只用于 200 日均线和历史分位预热，不计入绩效。信号在 t 日收盘后生成，于下一交易日收盘执行，从再下一段收盘到收盘收益开始生效；策略与 QQQ 基准都计入 10 bp 初始建仓成本，策略调仓另按同一费率计费。
+
+当前可复现示例（市场数据截至 2026-09-25）：
+
+| 区间 | 策略 CAGR | QQQ CAGR | 策略最大回撤 | QQQ 最大回撤 | 策略 Sharpe | QQQ Sharpe |
+|---|---:|---:|---:|---:|---:|---:|
+| 近五年 | 12.42% | 16.42% | -12.77% | -35.12% | 0.82 | 0.61 |
+| 末尾 252 日评估切片 | 10.80% | 25.36% | -5.49% | -11.96% | 0.74 | 1.04 |
+
+同期最新温度计为 **47.73 / 100（neutral）**，候选 QQQ 风险仓位为 **55%**：宏观风险偏高、波动风险较低、趋势风险居中。它表达的是风险预算环境，不是“明天涨跌”的概率。
+
+这个结果表明默认保守策略明显压低了回撤和波动，但预声明的验证门槛只通过了“回撤更浅”一项：CAGR 只保留同期 QQQ 的 42.6%，Sharpe 也低于 QQQ。简单 QQQ 200DMA 基线在该切片的 CAGR 为 20.77%、Sharpe 为 0.89，均高于默认复合策略，代价是 -11.22% 的更深回撤。因此它已经是一个可运行的风控 MVP，但不能声称已经是经过验证的自动买卖或超额收益策略。
+
+详细设计见 [MVP 开发计划](docs/US_TECH_MVP_PLAN.md)、[方法与回测实验](docs/US_TECH_METHODOLOGY.md) 和 [MU–SOXS 个股置信度策略 v2.1](docs/MU_SOXS_CONFIDENCE_V2.md)。
+
+---
+
+## 旧版：A股风险监视器 · A-RISK/MONITOR
 
 一个本地运行的 A 股大盘风险监测看板：ERP 股权风险溢价、万得全A PE、10Y 国债、破净率、两市成交额×换手率、HV30 波动率、信贷脉冲（社融存量同比一阶导）、两融余额+动量、ETF 资金流向、申万行业热力图，以及一个「两层漏斗决策模型」给出综合仓位建议。
 

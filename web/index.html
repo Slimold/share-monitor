@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="美股科技市场风险温度计、QQQ 五年内回测与科技股观察状态。"
+    />
+    <title>美股科技市场温度计</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true">US</span>
+        <div>
+          <p class="product-name">美股科技市场温度计</p>
+          <p class="product-scope">QQQ 风险环境与科技股观察</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div id="header-quality" class="quality-badge" data-tone="loading" aria-live="polite">
+          正在读取数据
+        </div>
+        <button id="reload-button" class="text-button" type="button">重新读取</button>
+      </div>
+    </header>
+
+    <main id="main-content" class="page-shell" tabindex="-1">
+      <section id="loading-panel" class="state-panel" aria-live="polite">
+        <div class="skeleton skeleton-line skeleton-short"></div>
+        <div class="skeleton skeleton-line"></div>
+        <p>正在加载市场快照和回测结果...</p>
+      </section>
+
+      <section id="error-panel" class="state-panel state-panel-error" role="alert" hidden>
+        <div>
+          <h1>暂时无法显示仪表盘</h1>
+          <p id="error-message">结果文件尚未生成或无法读取。</p>
+          <p class="state-help">
+            在线版本可等待下一次自动发布，或在 GitHub Actions 手动运行更新。本地版本请先在仓库根目录生成数据并通过 HTTP 服务打开；直接双击 HTML 可能被浏览器安全策略拦截。
+          </p>
+        </div>
+        <button id="error-retry-button" class="primary-button" type="button">重试</button>
+      </section>
+
+      <div id="dashboard" hidden>
+        <section class="overview-grid" aria-labelledby="overview-title">
+          <article class="risk-panel">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-kicker">MARKET RISK</p>
+                <h1 id="overview-title">当前风险环境</h1>
+              </div>
+              <p id="market-date" class="as-of">市场日期 --</p>
+            </div>
+
+            <div class="risk-body">
+              <div
+                id="risk-gauge"
+                class="risk-gauge"
+                role="meter"
+                aria-label="市场总风险分"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+              >
+                <div class="risk-gauge-inner">
+                  <strong id="risk-score">--</strong>
+                  <span>/ 100</span>
+                </div>
+              </div>
+
+              <div class="risk-copy">
+                <div class="state-row">
+                  <span id="regime-badge" class="regime-badge" data-regime="unavailable">
+                    数据不足
+                  </span>
+                  <span id="target-position" class="position-label">候选仓位 --</span>
+                </div>
+                <p id="action-label" class="action-label">等待数据</p>
+                <ul id="reason-list" class="reason-list" aria-label="主要原因"></ul>
+              </div>
+            </div>
+          </article>
+
+          <article class="components-panel" aria-labelledby="components-title">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-kicker">COMPONENTS</p>
+                <h2 id="components-title">风险分项</h2>
+              </div>
+              <p class="microcopy">分数越高，环境风险越高</p>
+            </div>
+            <div id="component-list" class="component-list"></div>
+            <dl id="latest-values" class="latest-grid" aria-label="最新市场数据"></dl>
+          </article>
+        </section>
+
+        <section class="chart-grid" aria-label="风险与回测走势">
+          <article class="chart-panel">
+            <div class="section-heading">
+              <div>
+                <h2>最近风险历史</h2>
+                <p>市场风险分与风险状态阈值</p>
+              </div>
+              <span id="risk-history-range" class="range-label">--</span>
+            </div>
+            <div class="chart-wrap">
+              <canvas
+                id="risk-chart"
+                role="img"
+                aria-label="最近市场风险分折线图"
+              ></canvas>
+              <div id="risk-chart-empty" class="chart-empty" hidden>暂无足够的风险历史数据</div>
+            </div>
+            <p id="risk-chart-summary" class="chart-summary"></p>
+            <details class="data-disclosure">
+              <summary>查看风险历史数据表</summary>
+              <div class="table-scroll compact-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">日期</th>
+                      <th scope="col">风险分</th>
+                      <th scope="col">目标仓位</th>
+                    </tr>
+                  </thead>
+                  <tbody id="risk-history-table"></tbody>
+                </table>
+              </div>
+            </details>
+          </article>
+
+          <article class="chart-panel">
+            <div class="section-heading">
+              <div>
+                <h2>策略与 QQQ 净值</h2>
+                <p>初始净值归一化为 1，已计配置中的交易成本</p>
+              </div>
+              <span id="backtest-range" class="range-label">--</span>
+            </div>
+            <div class="chart-legend" aria-label="图例">
+              <span><i class="legend-line legend-strategy"></i>温度计策略</span>
+              <span><i class="legend-line legend-benchmark"></i>QQQ 买入持有</span>
+            </div>
+            <div class="chart-wrap">
+              <canvas
+                id="equity-chart"
+                role="img"
+                aria-label="温度计策略与 QQQ 买入持有净值对比折线图"
+              ></canvas>
+              <div id="equity-chart-empty" class="chart-empty" hidden>暂无可展示的回测净值数据</div>
+            </div>
+            <p id="equity-chart-summary" class="chart-summary"></p>
+            <details class="data-disclosure">
+              <summary>查看净值数据表</summary>
+              <div class="table-scroll compact-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">日期</th>
+                      <th scope="col">策略净值</th>
+                      <th scope="col">QQQ 净值</th>
+                    </tr>
+                  </thead>
+                  <tbody id="equity-history-table"></tbody>
+                </table>
+              </div>
+            </details>
+          </article>
+        </section>
+
+        <section class="content-panel" aria-labelledby="backtest-title">
+          <div class="section-heading section-heading-wide">
+            <div>
+              <p class="section-kicker">BACKTEST</p>
+              <h2 id="backtest-title">五年窗口内回测结果</h2>
+              <p>全样本用于描述，最后约 252 个可执行交易日作为尾部评估切片。</p>
+            </div>
+            <div id="backtest-assumptions" class="assumption-list"></div>
+          </div>
+
+          <div class="comparison-grid">
+            <article class="metric-group" aria-labelledby="full-title">
+              <div class="metric-group-heading">
+                <h3 id="full-title">全可执行区间</h3>
+                <span id="full-period">--</span>
+              </div>
+              <div id="full-metrics" class="metric-table"></div>
+            </article>
+            <article class="metric-group metric-group-emphasis" aria-labelledby="holdout-title">
+              <div class="metric-group-heading">
+                <h3 id="holdout-title">尾部评估切片</h3>
+                <span id="holdout-period">--</span>
+              </div>
+              <div id="holdout-metrics" class="metric-table"></div>
+            </article>
+          </div>
+          <div id="backtest-callout" class="research-callout"></div>
+
+          <div class="sensitivity-block" aria-labelledby="sensitivity-title">
+            <div class="sensitivity-heading">
+              <div>
+                <h3 id="sensitivity-title">预声明敏感性实验</h3>
+                <p>完整报告全部固定变体，不按回测结果挑选赢家。仪表盘默认策略仍为 conservative。</p>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table sensitivity-table">
+                <thead>
+                  <tr>
+                    <th scope="col">策略</th>
+                    <th scope="col">全区间 CAGR</th>
+                    <th scope="col">全区间最大回撤</th>
+                    <th scope="col">尾部 CAGR</th>
+                    <th scope="col">尾部最大回撤</th>
+                    <th scope="col">尾部换手</th>
+                  </tr>
+                </thead>
+                <tbody id="sensitivity-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="content-panel" aria-labelledby="indicator-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">INDICATORS</p>
+              <h2 id="indicator-title">核心指标</h2>
+              <p>数值、风险方向和来源质量集中展示。</p>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">指标</th>
+                  <th scope="col">最新值</th>
+                  <th scope="col">所属分项风险</th>
+                  <th scope="col">观测日期</th>
+                  <th scope="col">来源状态</th>
+                </tr>
+              </thead>
+              <tbody id="indicator-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="content-panel" aria-labelledby="watchlist-title">
+          <div class="section-heading section-heading-wide">
+            <div>
+              <p class="section-kicker">WATCHLIST</p>
+              <h2 id="watchlist-title">科技股观察状态</h2>
+              <p>市场闸门与个股趋势的解释性组合，不代表自动交易指令。</p>
+            </div>
+            <p id="watchlist-count" class="range-label">0 只股票</p>
+          </div>
+          <article
+            id="mu-soxs-card"
+            class="pair-signal-card"
+            aria-labelledby="mu-soxs-title"
+            hidden
+          >
+            <div class="pair-signal-heading">
+              <div>
+                <p class="section-kicker">PAIR STRATEGY · CONFIDENCE V2.1</p>
+                <h3 id="mu-soxs-title">MU ↔ SOXS 配对策略</h3>
+                <p id="mu-soxs-meta" class="microcopy">--</p>
+              </div>
+              <span id="mu-soxs-decision" class="strategy-decision" data-tone="unknown">--</span>
+            </div>
+
+            <dl class="pair-market-facts">
+              <div>
+                <dt>MU 收盘价</dt>
+                <dd id="mu-soxs-mu-close">--</dd>
+              </div>
+              <div>
+                <dt>MU RSI(6)</dt>
+                <dd id="mu-soxs-rsi">--</dd>
+              </div>
+              <div>
+                <dt>市场风险</dt>
+                <dd id="mu-soxs-market-risk">--</dd>
+              </div>
+            </dl>
+
+            <div class="confidence-grid">
+              <section class="confidence-block" aria-labelledby="buy-confidence-label">
+                <div class="confidence-heading">
+                  <span id="buy-confidence-label">买入 MU 置信度</span>
+                  <span id="buy-confidence-level" class="confidence-level">--</span>
+                </div>
+                <div class="confidence-value">
+                  <strong id="buy-confidence-value">--</strong><span>/100</span>
+                </div>
+                <div
+                  id="buy-confidence-meter"
+                  class="confidence-meter confidence-meter-buy"
+                  role="meter"
+                  aria-label="买入 MU 置信度"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                >
+                  <span></span>
+                </div>
+              </section>
+
+              <section class="confidence-block" aria-labelledby="sell-confidence-label">
+                <div class="confidence-heading">
+                  <span id="sell-confidence-label">卖出 MU / 买入 SOXS 置信度</span>
+                  <span id="sell-confidence-level" class="confidence-level">--</span>
+                </div>
+                <div class="confidence-value">
+                  <strong id="sell-confidence-value">--</strong><span>/100</span>
+                </div>
+                <div
+                  id="sell-confidence-meter"
+                  class="confidence-meter confidence-meter-sell"
+                  role="meter"
+                  aria-label="卖出 MU 并买入 SOXS 置信度"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                >
+                  <span></span>
+                </div>
+              </section>
+            </div>
+
+            <div class="pair-signal-footer">
+              <ul id="mu-soxs-reasons" class="reason-list pair-reasons"></ul>
+              <p id="mu-soxs-backtest" class="pair-backtest-summary">近期回测 --</p>
+            </div>
+            <p class="confidence-disclaimer">
+              分数表示规则证据强度，不是上涨或下跌概率。回测包含 6–8 月策略设计期，盈利笔数不是未来胜率。SOXS 只有在板块、反向ETF趋势和冲击冷却同时确认后才允许进入候选。
+            </p>
+          </article>
+          <div class="table-scroll">
+            <table class="data-table watchlist-table">
+              <thead>
+                <tr>
+                  <th scope="col">股票</th>
+                  <th scope="col">状态</th>
+                  <th scope="col">收盘价</th>
+                  <th scope="col">60日相对强弱</th>
+                  <th scope="col">距52周高点</th>
+                  <th scope="col">原因</th>
+                </tr>
+              </thead>
+              <tbody id="watchlist-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="content-panel quality-panel" aria-labelledby="quality-title">
+          <div class="section-heading section-heading-wide">
+            <div>
+              <p class="section-kicker">DATA QUALITY</p>
+              <h2 id="quality-title">数据新鲜度</h2>
+              <p>缓存回退和陈旧来源会被明确标识，不会被伪装成最新结果。</p>
+            </div>
+            <div class="timestamp-block">
+              <span>文件生成时间</span>
+              <strong id="generated-at">--</strong>
+            </div>
+          </div>
+          <div id="freshness-list" class="freshness-list"></div>
+        </section>
+
+        <aside class="disclaimer" aria-label="使用说明">
+          <strong>研究用途</strong>
+          <p>
+            风险分是历史相对状态，不是上涨或下跌概率。仪表盘不构成投资建议，也不替代公司基本面、财报风险和个人仓位约束。
+          </p>
+          <a
+            href="https://github.com/Slimold/share-monitor/blob/main/docs/US_TECH_METHODOLOGY.md"
+            rel="noopener noreferrer"
+            >阅读模型与回测方法</a
+          >
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>
