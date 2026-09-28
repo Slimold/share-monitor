@@ -34,6 +34,7 @@ def test_quality_uses_observation_dates_and_configured_market_age() -> None:
             "stale": False,
             "last_observation_date": "2026-09-18",
             "cache_path": "C:/Users/example/private-cache/qqq.json",
+            "error": "request failed at C:/Users/example/private-cache?token=secret",
         },
         "FRED:NFCI": {
             "stale": False,
@@ -56,6 +57,11 @@ def test_quality_uses_observation_dates_and_configured_market_age() -> None:
     assert quality["source_metadata"]["YAHOO:QQQ"]["observation_stale"] is True
     assert quality["source_metadata"]["FRED:NFCI"]["observation_stale"] is False
     assert "cache_path" not in quality["source_metadata"]["YAHOO:QQQ"]
+    assert "error" not in quality["source_metadata"]["YAHOO:QQQ"]
+    assert (
+        quality["source_metadata"]["YAHOO:QQQ"]["error_code"]
+        == "upstream_refresh_failed_using_cache"
+    )
 
 
 def test_release_lag_on_weekend_reaches_next_market_session(monkeypatch, tmp_path) -> None:

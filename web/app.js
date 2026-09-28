@@ -7,6 +7,8 @@ const DATA_DIRECTORY = new URL(
 );
 const SNAPSHOT_URL = new URL("us_tech_snapshot.json", DATA_DIRECTORY).href;
 const BACKTEST_URL = new URL("backtest_results.json", DATA_DIRECTORY).href;
+const SITE_STALE_AFTER_HOURS = 72;
+const FILE_FETCH_TIMEOUT_MS = 20_000;
 
 const LABELS = {
   regimes: {
@@ -102,6 +104,10 @@ const state = {
   riskHistory: [],
   equityHistory: [],
   resizeObserver: null,
+  loading: false,
+  hasRendered: false,
+  snapshotRaw: null,
+  backtestRaw: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -183,6 +189,13 @@ function formatDateTime(value) {
     minute: "2-digit",
     timeZoneName: "short",
   }).format(date);
+}
+
+function ageInHours(value) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, (Date.now() - timestamp) / 3_600_000);
 }
 
 function riskTone(score) {
@@ -318,54 +331,115 @@ function normalizeBacktest(raw = {}) {
 
 async function fetchJson(url) {
   const requestUrl = new URL(url, window.location.href);
+  const fileName = requestUrl.pathname.split("/").filter(Boolean).at(-1) || "数据文件";
   requestUrl.searchParams.set("refresh", String(Date.now()));
-  const response = await fetch(requestUrl, { cache: "no-store" });
-  if (!response.ok) throw new Error(`${url} 返回 HTTP ${response.status}`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), FILE_FETCH_TIMEOUT_MS);
   try {
-    return await response.json();
+    const response = await fetch(requestUrl, { cache: "no-store", signal: controller.signal });
+    if (!response.ok) throw new Error(`${fileName} 返回 HTTP ${response.status}`);
+    try {
+      return await response.json();
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      throw new Error(`${fileName} 不是有效的 JSON: ${error.message}`);
+    }
   } catch (error) {
-    throw new Error(`${url} 不是有效的 JSON: ${error.message}`);
+    if (error?.name === "AbortError") {
+      throw new Error(`${fileName} 读取超过 ${FILE_FETCH_TIMEOUT_MS / 1000} 秒`);
+    }
+    if (error?.message?.startsWith(`${fileName} `)) throw error;
+    throw new Error(`${fileName} 读取失败: ${error?.message || String(error)}`);
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
 async function loadDashboard() {
-  byId("loading-panel").hidden = false;
-  byId("error-panel").hidden = true;
-  byId("dashboard").hidden = true;
+  if (state.loading) return;
+  state.loading = true;
+
+  const isInitialLoad = !state.hasRendered;
+  const reloadButton = byId("reload-button");
+  const retryButton = byId("error-retry-button");
   const headerQuality = byId("header-quality");
+  reloadButton.disabled = true;
+  retryButton.disabled = true;
+  text(reloadButton, "读取中…");
+  byId("main-content").setAttribute("aria-busy", "true");
+  byId("loading-panel").hidden = !isInitialLoad;
+  byId("error-panel").hidden = true;
+  if (isInitialLoad) byId("dashboard").hidden = true;
   headerQuality.dataset.tone = "loading";
   text(headerQuality, "正在读取数据");
+  headerQuality.removeAttribute("title");
+  hideLoadStatus();
 
-  const [snapshotResult, backtestResult] = await Promise.allSettled([
-    fetchJson(SNAPSHOT_URL),
-    fetchJson(BACKTEST_URL),
-  ]);
+  try {
+    const [snapshotResult, backtestResult] = await Promise.allSettled([
+      fetchJson(SNAPSHOT_URL),
+      fetchJson(BACKTEST_URL),
+    ]);
 
-  if (snapshotResult.status === "rejected" && backtestResult.status === "rejected") {
-    byId("loading-panel").hidden = true;
-    byId("error-panel").hidden = false;
-    text(
-      byId("error-message"),
-      `市场快照与回测结果均读取失败。${snapshotResult.reason.message}；${backtestResult.reason.message}`
+    if (snapshotResult.status === "rejected" && backtestResult.status === "rejected") {
+      const message = `市场快照与回测结果均读取失败。${snapshotResult.reason.message}；${backtestResult.reason.message}`;
+      byId("loading-panel").hidden = true;
+      headerQuality.dataset.tone = "error";
+      headerQuality.title = message;
+      if (state.hasRendered) {
+        text(headerQuality, "刷新失败，保留上次数据");
+        byId("dashboard").hidden = false;
+        showLoadStatus("error", "刷新失败，已保留上次数据", message);
+      } else {
+        byId("error-panel").hidden = false;
+        text(byId("error-message"), message);
+        text(headerQuality, "数据不可用");
+      }
+      return;
+    }
+
+    const errors = [];
+    if (snapshotResult.status === "fulfilled") state.snapshotRaw = snapshotResult.value;
+    else errors.push(`市场快照：${snapshotResult.reason.message}`);
+    if (backtestResult.status === "fulfilled") state.backtestRaw = backtestResult.value;
+    else errors.push(`回测结果：${backtestResult.reason.message}`);
+
+    renderDashboard(
+      normalizeSnapshot(state.snapshotRaw || {}),
+      normalizeBacktest(state.backtestRaw || {}),
+      errors
     );
+    state.hasRendered = true;
+    byId("loading-panel").hidden = true;
+    byId("dashboard").hidden = false;
+  } catch (error) {
+    const message = `仪表盘处理失败：${error?.message || String(error)}`;
+    byId("loading-panel").hidden = true;
     headerQuality.dataset.tone = "error";
-    text(headerQuality, "数据不可用");
-    return;
+    headerQuality.title = message;
+    if (state.hasRendered) {
+      byId("dashboard").hidden = false;
+      text(headerQuality, "刷新失败，保留上次数据");
+      showLoadStatus("error", "页面更新失败，已保留上次数据", message);
+    } else {
+      byId("error-panel").hidden = false;
+      text(byId("error-message"), message);
+      text(headerQuality, "数据不可用");
+    }
+  } finally {
+    state.loading = false;
+    reloadButton.disabled = false;
+    retryButton.disabled = false;
+    text(reloadButton, "重新读取");
+    byId("main-content").removeAttribute("aria-busy");
   }
-
-  const errors = [];
-  const snapshotRaw = snapshotResult.status === "fulfilled" ? snapshotResult.value : {};
-  const backtestRaw = backtestResult.status === "fulfilled" ? backtestResult.value : {};
-  if (snapshotResult.status === "rejected") errors.push(`市场快照：${snapshotResult.reason.message}`);
-  if (backtestResult.status === "rejected") errors.push(`回测结果：${backtestResult.reason.message}`);
-
-  renderDashboard(normalizeSnapshot(snapshotRaw), normalizeBacktest(backtestRaw), errors);
-  byId("loading-panel").hidden = true;
-  byId("dashboard").hidden = false;
 }
 
 function renderDashboard(snapshot, backtest, loadErrors) {
-  renderHeaderQuality(snapshot.quality, loadErrors);
+  const generatedAt = snapshot.generatedAt || backtest.generatedAt;
+  renderHeaderQuality(snapshot.quality, loadErrors, generatedAt);
+  renderLoadStatus(loadErrors);
+  renderSiteStaleAlert(generatedAt);
   renderOverview(snapshot);
   renderRiskHistory(snapshot.history);
   renderBacktest(backtest);
@@ -376,26 +450,74 @@ function renderDashboard(snapshot, backtest, loadErrors) {
   installChartResizeObserver();
 }
 
-function renderHeaderQuality(quality, loadErrors) {
+function hideLoadStatus() {
+  const alert = byId("load-status-alert");
+  alert.hidden = true;
+  alert.removeAttribute("data-tone");
+}
+
+function showLoadStatus(tone, title, message) {
+  const alert = byId("load-status-alert");
+  alert.dataset.tone = tone;
+  alert.setAttribute("role", tone === "error" ? "alert" : "status");
+  alert.setAttribute("aria-live", tone === "error" ? "assertive" : "polite");
+  text(byId("load-status-title"), title);
+  text(byId("load-status-message"), message);
+  alert.hidden = false;
+}
+
+function renderLoadStatus(loadErrors) {
+  if (!loadErrors.length) {
+    hideLoadStatus();
+    return;
+  }
+  showLoadStatus(
+    "warning",
+    "部分数据刷新失败",
+    `${loadErrors.join("；")}。页面正在显示其余可用数据或上次成功读取的结果。`
+  );
+}
+
+function renderHeaderQuality(quality, loadErrors, generatedAt) {
   const badge = byId("header-quality");
   const staleCount = quality.staleSources.length;
   const normalizedStatus = quality.status.toLowerCase();
-  if (
-    loadErrors.length ||
-    staleCount ||
-    ["unknown", "stale", "warning", "degraded"].includes(normalizedStatus)
-  ) {
-    badge.dataset.tone = "warning";
-    text(badge, staleCount ? `${staleCount} 个来源陈旧` : "部分数据不可用");
-    return;
-  }
+  const siteAgeHours = ageInHours(generatedAt);
   if (["error", "failed", "unavailable"].includes(normalizedStatus)) {
     badge.dataset.tone = "error";
     text(badge, "数据质量异常");
     return;
   }
+  if (
+    loadErrors.length ||
+    staleCount ||
+    (siteAgeHours !== null && siteAgeHours > SITE_STALE_AFTER_HOURS) ||
+    ["unknown", "stale", "warning", "degraded"].includes(normalizedStatus)
+  ) {
+    badge.dataset.tone = "warning";
+    if (siteAgeHours !== null && siteAgeHours > SITE_STALE_AFTER_HOURS) {
+      text(badge, "站点数据已过期");
+    } else {
+      text(badge, staleCount ? `${staleCount} 个来源陈旧` : "部分数据不可用");
+    }
+    return;
+  }
   badge.dataset.tone = "ok";
   text(badge, "数据读取完成");
+}
+
+function renderSiteStaleAlert(generatedAt) {
+  const alert = byId("site-stale-alert");
+  const message = byId("site-stale-message");
+  const siteAgeHours = ageInHours(generatedAt);
+  const isStale = siteAgeHours !== null && siteAgeHours > SITE_STALE_AFTER_HOURS;
+  alert.hidden = !isStale;
+  if (!isStale) return;
+  const wholeDays = Math.max(3, Math.floor(siteAgeHours / 24));
+  text(
+    message,
+    `最近一次发布距今约 ${wholeDays} 天（${formatDateTime(generatedAt)}）。请不要把页面上的信号当作当前行情。`
+  );
 }
 
 function renderOverview(snapshot) {
@@ -917,8 +1039,15 @@ function normalizeSourceMetadata(metadata) {
     cacheStale: Boolean(item.stale),
     observationStale: Boolean(item.observation_stale),
     stale: Boolean(item.stale || item.observation_stale),
-    error: firstDefined(item.error, null),
+    error: firstDefined(item.error_code, item.error, null),
   }));
+}
+
+function sourceErrorLabel(value) {
+  const labels = {
+    upstream_refresh_failed_using_cache: "上游刷新失败，已使用缓存",
+  };
+  return labels[value] || value;
 }
 
 function renderFreshness(snapshot, backtest, loadErrors) {
@@ -941,7 +1070,7 @@ function renderFreshness(snapshot, backtest, loadErrors) {
         "freshness-meta",
         `${source.provider} | 观测至 ${formatDate(source.observedAt)} | 抓取 ${formatDateTime(source.fetchedAt)}` +
           `${source.ageSessions === null ? "" : ` | ${formatNumber(source.ageSessions, 0)} 个工作日`}` +
-          `${source.error ? ` | ${source.error}` : ""}`
+          `${source.error ? ` | ${sourceErrorLabel(source.error)}` : ""}`
       )
     );
     root.append(item);

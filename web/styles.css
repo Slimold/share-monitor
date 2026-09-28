@@ -231,6 +231,12 @@ details:focus-visible {
   color: var(--text);
 }
 
+.text-button:disabled,
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .primary-button {
   flex: 0 0 auto;
   padding: 10px 18px;
@@ -248,6 +254,31 @@ details:focus-visible {
   width: min(1520px, 100%);
   margin: 0 auto;
   padding: clamp(16px, 2.5vw, 36px);
+}
+
+.site-alert {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid rgb(244 196 94 / 42%);
+  border-radius: var(--radius-small);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.site-alert[data-tone="error"] {
+  border-color: rgb(255 125 134 / 42%);
+  background: var(--negative-soft);
+  color: var(--negative);
+}
+
+.site-alert span {
+  min-width: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .state-panel {
@@ -1215,6 +1246,9 @@ tbody tr:hover td {
 }
 
 .disclaimer a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   white-space: nowrap;
 }
 
@@ -1251,6 +1285,12 @@ tbody tr:hover td {
 
   .page-shell {
     padding: 12px;
+  }
+
+  .site-alert {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .risk-panel,

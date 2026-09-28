@@ -49,6 +49,28 @@
       </section>
 
       <div id="dashboard" hidden>
+        <section
+          id="load-status-alert"
+          class="site-alert"
+          role="status"
+          aria-live="polite"
+          hidden
+        >
+          <strong id="load-status-title">数据读取提示</strong>
+          <span id="load-status-message"></span>
+        </section>
+
+        <section
+          id="site-stale-alert"
+          class="site-alert"
+          data-tone="warning"
+          role="alert"
+          hidden
+        >
+          <strong>数据可能已过期</strong>
+          <span id="site-stale-message"></span>
+        </section>
+
         <section class="overview-grid" aria-labelledby="overview-title">
           <article class="risk-panel">
             <div class="section-heading compact-heading">

@@ -170,6 +170,10 @@ def _quality_summary(
         # username or CI workspace path.  Keep them inside the data client,
         # never in the dashboard snapshot that can be published publicly.
         details.pop("cache_path", None)
+        # Raw exception messages can contain a local path or a provider URL
+        # with sensitive query parameters.  Publish a stable code instead.
+        if details.pop("error", None):
+            details["error_code"] = "upstream_refresh_failed_using_cache"
         observed = pd.to_datetime(details.get("last_observation_date"), errors="coerce")
         if pd.notna(observed):
             observed_date = observed.date()

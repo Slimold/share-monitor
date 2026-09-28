@@ -1,5 +1,7 @@
 # Share Monitor
 
+[![Deploy US Tech Monitor](https://github.com/Slimold/share-monitor/actions/workflows/deploy-us-tech-monitor.yml/badge.svg)](https://github.com/Slimold/share-monitor/actions/workflows/deploy-us-tech-monitor.yml)
+
 ## 美股科技市场温度计 MVP
 
 仓库新增了一个可独立运行的美股日频 MVP，用于回答：
@@ -41,8 +43,10 @@ python -m pytest
 - GitHub Actions 在北京时间周二至周六 09:17 自动运行，对应前一个美股交易日收盘后；每次都会重新抓取行情、运行测试和回测，再发布最新快照。
 - 页面右上角“重新读取”用于绕过浏览器缓存并读取最近一次已发布数据；它不会直接触发上游行情抓取。
 - 如需立即抓取并发布，可打开仓库的 **Actions → Deploy US Tech Monitor → Run workflow** 手动运行。
+- 页面在最近一次发布超过 72 小时时会显示过期警告。GitHub 可能暂停长期无仓库活动的公开仓库定时任务；届时在 Actions 页面重新启用工作流并手动运行一次即可恢复。
 
 部署工作流见 [deploy-us-tech-monitor.yml](.github/workflows/deploy-us-tech-monitor.yml)。发布物只包含静态页面和汇总 JSON，不包含 `.env`、原始行情缓存或任何密钥。
+自动部署使用 [requirements-us.lock](requirements-us.lock) 中已在线上构建验证的 Python 3.12 精确版本；`requirements-us.txt` 继续作为本地跨版本安装入口。
 
 构建命令会产生：
 
@@ -56,7 +60,7 @@ python -m pytest
 
 | 区间 | 策略 CAGR | QQQ CAGR | 策略最大回撤 | QQQ 最大回撤 | 策略 Sharpe | QQQ Sharpe |
 |---|---:|---:|---:|---:|---:|---:|
-| 近五年 | 12.42% | 16.42% | -12.77% | -35.12% | 0.82 | 0.61 |
+| 近五年 | 12.05% | 15.73% | -12.77% | -35.12% | 0.79 | 0.58 |
 | 末尾 252 日评估切片 | 10.80% | 25.36% | -5.49% | -11.96% | 0.74 | 1.04 |
 
 同期最新温度计为 **47.73 / 100（neutral）**，候选 QQQ 风险仓位为 **55%**：宏观风险偏高、波动风险较低、趋势风险居中。它表达的是风险预算环境，不是“明天涨跌”的概率。
